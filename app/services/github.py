@@ -53,7 +53,7 @@ def post_pr_review(repo_name: str, pr_number: int, review_data: PRReviewResult):
         
         # Pull latest commit object for comment pinning (safer list extraction)
         commits = list(pr.get_commits())
-        latest_commit = commits[-1]
+        latest_commit = commits[-1] 
         
         for comment in review_data.comments:
             body = (
