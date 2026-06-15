@@ -40,7 +40,6 @@ embeddings = NativeGeminiEmbeddings()
 # 2. Dynamic Vector Store Router
 def get_vector_store():
     """Routes to the correct database based on the environment."""
-    print(f"Initializing vector store for environment: {ENVIRONMENT}")
     if ENVIRONMENT == "production":
         # --- CLOUD PRODUCTION (Pinecone) ---
         # Requires PINECONE_API_KEY to be set in your production environment
