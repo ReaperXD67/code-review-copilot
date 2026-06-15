@@ -1,12 +1,16 @@
-fastapi==0.110.0
-uvicorn==0.27.1
+fastapi
+uvicorn
 pydantic==2.6.4
-PyGithub==2.2.0
+python-dotenv
+requests
+PyGitHub
 
-langchain==0.2.11
-langchain-community==0.2.10
-langchain-google-genai==1.0.8
-langchain-chroma==0.1.2
-
+# Keep ChromaDB pinned to avoid the v1/v2 API crash we fixed earlier
 chromadb==0.4.24
-python-dotenv==1.0.1
+
+# Unpin all LangChain packages so pip can resolve the compatible matrix natively
+langchain
+langchain-community
+langchain-google-genai
+langchain-chroma
+langchain-pinecone
