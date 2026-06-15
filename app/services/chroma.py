@@ -44,7 +44,7 @@ def get_vector_store(repo_name: str):
     if ENVIRONMENT == "production":
         # Pinecone natively isolates data using the 'namespace' parameter
         return PineconeVectorStore(
-            index_name="pr-house-rules", 
+            index_name="code-review-copilot", 
             embedding=embeddings,
             namespace=repo_name # <-- DATA ISOLATION ACHIEVED
         )

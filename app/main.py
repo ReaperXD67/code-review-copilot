@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header
 from pydantic import BaseModel
 from app.services.github import get_pr_diff, post_pr_review
 from app.services.reviewer import analyze_pr_diff
@@ -7,9 +7,26 @@ from app.services.history import extract_rules_from_history_task
 import hmac
 import hashlib
 import os
+import json
 
 app = FastAPI(title="Code Review Copilot")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+
+def verify_github_signature(payload_body: bytes, signature_header: str) -> bool:
+    """Verifies the HMAC SHA256 signature from GitHub."""
+    if not signature_header or not WEBHOOK_SECRET:
+        return False
+        
+    # Hash the raw payload using your secret
+    hash_object = hmac.new(
+        WEBHOOK_SECRET.encode('utf-8'), 
+        msg=payload_body, 
+        digestmod=hashlib.sha256
+    )
+    expected_signature = "sha256=" + hash_object.hexdigest()
+    
+    # Use hmac.compare_digest to prevent timing attacks
+    return hmac.compare_digest(expected_signature, signature_header)
 
 # --- DATA MODELS ---
 class ManualReviewRequest(BaseModel):
@@ -41,10 +58,15 @@ async def manual_review(request: ManualReviewRequest):
     return {"status": "success", "applied_rules": house_rules, "summary": review_result.risk_summary}
 
 @app.post("/webhook/github")
-async def github_webhook(request: Request, background_tasks: BackgroundTasks):
+async def github_webhook(request: Request, background_tasks: BackgroundTasks, x_hub_signature_256: str = Header(None)):
     """Receives GitHub webhooks and coordinates the AI review."""
     
-    payload = await request.json()
+    payload_body = await request.body()
+
+    if not verify_github_signature(payload_body, x_hub_signature_256):
+        raise HTTPException(status_code=401, detail="Invalid signature. Unauthorized webhook.")
+
+    payload = json.loads(payload_body)
     action = payload.get("action")
     
     repo_name = payload.get("repository", {}).get("full_name")
