@@ -38,46 +38,44 @@ class NativeGeminiEmbeddings:
 embeddings = NativeGeminiEmbeddings()
 
 # 2. Dynamic Vector Store Router
-def get_vector_store():
-    """Routes to the correct database based on the environment."""
+def get_vector_store(repo_name: str):
+    """Dynamically routes to a repo-specific isolated partition."""
+    
     if ENVIRONMENT == "production":
-        # --- CLOUD PRODUCTION (Pinecone) ---
-        # Requires PINECONE_API_KEY to be set in your production environment
+        # Pinecone natively isolates data using the 'namespace' parameter
         return PineconeVectorStore(
-            index_name="code-review-copilot", 
-            embedding=embeddings
+            index_name="pr-house-rules", 
+            embedding=embeddings,
+            namespace=repo_name # <-- DATA ISOLATION ACHIEVED
         )
     else:
-        # --- LOCAL DEVELOPMENT (ChromaDB) ---
+        # ChromaDB isolates data using separate 'collections'
+        # Chroma requires alphanumeric collection names without slashes
+        safe_repo_name = repo_name.replace("/", "_").replace("-", "_")
         chroma_client = chromadb.HttpClient(host="chromadb", port=8000)
+        
         return Chroma(
             client=chroma_client,
-            collection_name="pr_house_rules",
+            collection_name=safe_repo_name, # <-- DATA ISOLATION ACHIEVED
             embedding_function=embeddings
         )
 
-# Initialize the universal vector store instance
-vector_store = get_vector_store()
-
-# ---------------------------------------------------------
-# The functions below remain EXACTLY the same!
-# ---------------------------------------------------------
-
-def learn_convention(rule: str):
-    """Embeds and saves a new coding rule to the vector database."""
+def learn_convention(rule: str, repo_name: str):
+    """Embeds and saves a new coding rule to the repo's specific namespace."""
+    vector_store = get_vector_store(repo_name)
     vector_store.add_texts(texts=[rule])
     return True
 
-def retrieve_relevant_rules(diff_text: str) -> str:
-    """Finds the top 3 most relevant rules based on the code being changed in the PR."""
+def retrieve_relevant_rules(diff_text: str, repo_name: str) -> str:
+    """Finds the top 3 most relevant rules exclusively for this repo."""
     try:
+        vector_store = get_vector_store(repo_name)
         results = vector_store.similarity_search(query=diff_text, k=3)
         
         if not results:
             return "None"
         
-        formatted_rules = "\n".join([f"- {doc.page_content}" for doc in results])
-        return formatted_rules
+        return "\n".join([f"- {doc.page_content}" for doc in results])
     except Exception as e:
-        logging.error(f"Error retrieving relevant rules: {e}")
+        logging.error(f"Error retrieving rules for {repo_name}: {e}")
         return "None"
