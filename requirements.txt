@@ -14,3 +14,5 @@ langchain-community
 langchain-google-genai
 langchain-chroma
 langchain-pinecone
+
+google-generativeai
