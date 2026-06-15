@@ -2,8 +2,11 @@ fastapi==0.110.0
 uvicorn==0.27.1
 pydantic==2.6.4
 PyGithub==2.2.0
-langchain==0.1.13
-langchain-community==0.0.29
-langchain-google-genai==1.0.3  # <-- NEW DEPENDENCY
+
+langchain==0.2.11
+langchain-community==0.2.10
+langchain-google-genai==1.0.8
+langchain-chroma==0.1.2
+
 chromadb==0.4.24
 python-dotenv==1.0.1
