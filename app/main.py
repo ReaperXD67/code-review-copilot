@@ -1,5 +1,5 @@
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Header
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.services.github import get_pr_diff, post_pr_review
 from app.services.reviewer import analyze_pr_diff
 from app.services.chroma import learn_convention, retrieve_relevant_rules
@@ -8,6 +8,7 @@ import hmac
 import hashlib
 import os
 import json
+from json import JSONDecodeError
 
 app = FastAPI(title="Code Review Copilot")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
@@ -30,18 +31,23 @@ def verify_github_signature(payload_body: bytes, signature_header: str) -> bool:
 
 # --- DATA MODELS ---
 class ManualReviewRequest(BaseModel):
-    repo_name: str
-    pr_number: int
+    repo_name: str = Field(min_length=1, examples=["Owner/Repository"])
+    pr_number: int = Field(gt=0)
 
 class ConventionRequest(BaseModel):
-    rule: str
+    repo_name: str = Field(min_length=1, examples=["Owner/Repository"])
+    rule: str = Field(min_length=1)
 
 # --- ENDPOINTS ---
 @app.post("/conventions/learn")
 async def add_house_rule(request: ConventionRequest):
     """Endpoint to teach the Copilot a new house rule."""
-    learn_convention(request.rule)
-    return {"status": "success", "message": f"Learned new rule: {request.rule}"}
+    learn_convention(request.rule, request.repo_name)
+    return {
+        "status": "success",
+        "repo_name": request.repo_name,
+        "message": f"Learned new rule: {request.rule}",
+    }
 
 @app.post("/review/manual")
 async def manual_review(request: ManualReviewRequest):
@@ -66,7 +72,11 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks, x_
     if not verify_github_signature(payload_body, x_hub_signature_256):
         raise HTTPException(status_code=401, detail="Invalid signature. Unauthorized webhook.")
 
-    payload = json.loads(payload_body)
+    try:
+        payload = json.loads(payload_body)
+    except JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
     action = payload.get("action")
     
     repo_name = payload.get("repository", {}).get("full_name")
@@ -79,6 +89,8 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks, x_
         return {"status": "ignored", "reason": f"Action '{action}' is not reviewable"}
 
     pr_number = payload.get("pull_request", {}).get("number")
+    if not isinstance(pr_number, int):
+        raise HTTPException(status_code=400, detail="Pull request number missing from payload")
     
     # 2. FIRE AND FORGET: Trigger the history scraper in the background.
     # If the repo is already processed, the task will instantly exit.

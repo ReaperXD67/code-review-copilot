@@ -19,7 +19,7 @@ def get_pr_diff(repo_name: str, pr_number: int) -> str:
         
         diff_url = pr.diff_url
         headers = {"Authorization": f"token {GITHUB_TOKEN}"} if GITHUB_TOKEN else {}
-        response = requests.get(diff_url, headers=headers)
+        response = requests.get(diff_url, headers=headers, timeout=15)
         
         if response.status_code != 200:
             raise HTTPException(
