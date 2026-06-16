@@ -53,6 +53,13 @@ docker-compose up --build -d
 The FastAPI server will be available at http://localhost:8000.
 Access the interactive API documentation at http://localhost:8000/docs.
 
+### 4. Run Tests
+The core request-handling and diff-parsing behavior can be checked without live GitHub, Gemini, or Chroma credentials:
+
+```bash
+python -m unittest discover -s tests
+```
+
 ---
 
 ## 🛠️ Usage
