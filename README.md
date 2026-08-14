@@ -1,101 +1,111 @@
-# 🤖 GenAI Code Review Copilot
+# Code Review Copilot
 
-An autonomous, self-learning Code Review Copilot built with FastAPI, LangChain, and Google Gemini. It reviews Pull Requests in real-time, enforces repository-specific house rules using RAG (Retrieval-Augmented Generation), and automatically learns conventions from past merged PRs.
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](./requirements.txt)
+[![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](./app)
+[![Tests](https://img.shields.io/badge/tests-unittest-0a9edc)](./tests)
+[![Docker](https://img.shields.io/badge/runtime-Docker-2496ed?logo=docker&logoColor=white)](./Dockerfile)
 
----
+**A webhook-driven review service that combines the current diff with repository-specific conventions before it comments.**
 
-## ✨ Features
-* **Real-Time PR Review:** Intercepts GitHub Webhooks to analyze code diffs instantly.
-* **Inline GitHub Comments:** Posts contextual, severity-tagged suggestions directly to the exact line of code in the PR.
-* **Multi-Environment RAG:** Uses local ChromaDB for development and serverless Pinecone for production.
-* **Matryoshka Vector Compression:** Utilizes Google's native SDK to compress 3072-dimension embeddings into 1024 dimensions, saving database costs.
-* **Background History Ingestion:** Asynchronously scrapes merged PR history to learn implicit team coding conventions without blocking the webhook thread.
-* **Multi-Tenant Data Isolation:** Strictly isolates rules based on the `Owner/Repo_Name` namespace.
+The service receives GitHub pull-request events, verifies the webhook signature, retrieves relevant house rules and merged-PR history, asks Gemini for structured findings, and maps accepted findings back to review comments. Development uses ChromaDB; production can switch to Pinecone without changing the review flow.
 
----
+## What is implemented
 
-## 🏗️ Architecture Stack
-* **Framework:** FastAPI, Python 3.11
-* **AI/LLM:** Google Gemini 2.5 Flash, Gemini Embeddings 001
-* **Vector DB:** Pinecone (Prod) / ChromaDB (Dev)
-* **Orchestration:** LangChain
-* **Containerization:** Docker & Docker Compose
+| Capability | Implementation |
+|---|---|
+| Webhook intake | FastAPI endpoint with HMAC signature verification |
+| Review context | Pull-request diff plus repository-scoped retrieved conventions |
+| Retrieval | ChromaDB locally; Pinecone adapter for production |
+| Embeddings | Gemini embeddings with a reduced 1,024-dimensional representation |
+| History learning | Background ingestion of recent merged pull requests |
+| Isolation | Vector namespaces are scoped by `owner/repository` |
+| Verification | `unittest` coverage for webhook, review, signature, and diff-parser paths |
 
----
+## Runtime path
 
-## 🚀 Quickstart & Installation
+```mermaid
+flowchart LR
+  GH["GitHub pull_request event"] --> SIG["HMAC verification"]
+  SIG --> DIFF["Fetch and normalize diff"]
+  DIFF --> RET["Retrieve repository conventions"]
+  RET --> LLM["Gemini structured review"]
+  LLM --> MAP["Validate and map findings"]
+  MAP --> COMMENTS["GitHub review comments"]
+  GH -. "merged history" .-> INGEST["Background convention ingestion"]
+  INGEST --> RET
+```
 
-### 1. Prerequisites
-* Docker and Docker Compose installed.
-* A GitHub Personal Access Token (with `repo` and `pull_requests:write` permissions).
-* A Google Gemini API Key.
-* (Optional) A Pinecone API Key for production.
+## Quickstart
 
-### 2. Environment Variables
-Create a `.env` file in the root directory:
+Prerequisites: Docker, Docker Compose, a GitHub token with the repository permissions this integration needs, and a Gemini API key. Pinecone is optional.
+
+```bash
+cp .env.example .env
+```
+
+Set the real values locally:
+
 ```env
 GITHUB_TOKEN=your_github_token
 GEMINI_API_KEY=your_gemini_key
 WEBHOOK_SECRET=your_secure_random_string
 
-# For Production (Optional)
-ENVIRONMENT=development # Change to 'production' to use Pinecone
+# Optional production vector store
+ENVIRONMENT=development
 PINECONE_API_KEY=your_pinecone_key
 ```
-
-### 3. Build and Run
-Start the API and local ChromaDB containers:
 
 ```bash
 docker-compose up --build -d
 ```
 
-The FastAPI server will be available at http://localhost:8000.
-Access the interactive API documentation at http://localhost:8000/docs.
+Open the API documentation at [http://localhost:8000/docs](http://localhost:8000/docs).
 
-### 4. Run Tests
-The core request-handling and diff-parsing behavior can be checked without live GitHub, Gemini, or Chroma credentials:
+## Verify
+
+The focused tests do not require live GitHub or model credentials:
 
 ```bash
 python -m unittest discover -s tests
 ```
 
----
+## Connect a GitHub repository
 
-## 🛠️ Usage
-### Configuring the GitHub Webhook
-1. Go to your GitHub Repository -> Settings -> Webhooks -> Add webhook.
+Create a webhook in the repository settings with:
 
-2. Payload URL: https://your-public-url.com/webhook/github (Use ngrok if testing locally).
+- **Payload URL:** `https://<public-api-origin>/webhook/github`
+- **Content type:** `application/json`
+- **Secret:** the same value as `WEBHOOK_SECRET`
+- **Event:** Pull requests
 
-3. Content type: application/json.
+The `opened` and `synchronize` paths trigger review orchestration and enqueue history learning without blocking the webhook response.
 
-4. Secret: Paste the WEBHOOK_SECRET from your .env file.
+## Teach an explicit convention
 
-5. Select Let me select individual events and check Pull requests.
-
----
-
-## Manual Rule Injection
-You can manually teach the AI a new rule using the Swagger UI or via cURL:
+Use the Swagger UI or call the repository-scoped learning endpoint:
 
 ```bash
-curl -X 'POST' \
-  'http://localhost:8000/conventions/learn' \
-  -H 'Content-Type: application/json' \
+curl -X POST "http://localhost:8000/conventions/learn" \
+  -H "Content-Type: application/json" \
   -d '{
-  "rule": "All print statements must be replaced with logging.info()",
-  "repo_name": "YourOwner/YourRepo"
-}'
+    "rule": "Replace print statements with structured logging",
+    "repo_name": "owner/repository"
+  }'
 ```
 
----
+## Security boundary
 
-## Automatic History Learning
+- Reject webhook requests that do not pass HMAC-SHA256 verification.
+- Keep GitHub, Gemini, and Pinecone credentials out of commits and logs.
+- Scope retrieval data per repository to prevent cross-project convention leakage.
+- Treat model output as a proposed review: validate paths, lines, and severity before posting.
 
-The moment a new PR is opened or synchronized, the API will immediately trigger a background task to scrape that repository's last 10 merged PRs, extract the underlying house rules using AI, and save them to the database for future reviews.
+## Repository map
 
----
-
-## 🛡️ Security
-This application implements HMAC SHA256 signature validation to ensure all incoming webhooks are strictly authenticated by GitHub, preventing unauthorized access or abuse.
+```text
+app/                 API, integrations, retrieval, and review orchestration
+tests/               focused automated verification
+.env.example         required configuration contract
+docker-compose.yml   local service topology
+Dockerfile           reproducible API image
+```
