@@ -1,4 +1,8 @@
-# Code Review Copilot
+<div align="center">
+
+![Code Review Copilot — animated project overview](./docs/assets/readme/code-review-copilot-hero.svg)
+
+</div>
 
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](./requirements.txt)
 [![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?logo=fastapi&logoColor=white)](./app)
