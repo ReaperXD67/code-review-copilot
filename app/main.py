@@ -63,7 +63,7 @@ async def manual_review(request: ManualReviewRequest):
     
     return {"status": "success", "applied_rules": house_rules, "summary": review_result.risk_summary}
 
-@app.post("/webhook/github")
+#@app.post("/webhook/github")
 async def github_webhook(request: Request, background_tasks: BackgroundTasks, x_hub_signature_256: str = Header(None)):
     """Receives GitHub webhooks and coordinates the AI review."""
     
